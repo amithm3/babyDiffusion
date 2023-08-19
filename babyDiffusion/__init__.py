@@ -1,6 +1,6 @@
 from .autoencoder import (
     AutoEncoder, VariationalAutoEncoder,
-    vae_loss,
+    VAELoss,
     train, test,
 )
 

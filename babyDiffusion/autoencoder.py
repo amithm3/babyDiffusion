@@ -111,11 +111,15 @@ class VariationalAutoEncoder(AutoEncoder):
         return RECON_X, mu, logvar
 
 
-def vae_loss(out, X):
-    RECON_X, mu, logvar = out
-    recon_loss = nn.functional.mse_loss(RECON_X, X, reduction='sum')
-    kl_loss = -torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return recon_loss + kl_loss
+class VAELoss:
+    def __init__(self, beta: float = 1000):
+        self._beta = beta
+
+    def __call__(self, out, X):
+        RECON_X, mu, logvar = out
+        re_loss = torch.mean((RECON_X - X) ** 2)
+        kl_loss = torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) * -0.5
+        return re_loss * self._beta + kl_loss
 
 
 def train(
