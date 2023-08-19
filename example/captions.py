@@ -1,13 +1,12 @@
 import json
 import os
 
-if __name__ == '__main__':
-    with open("captions.json", "r") as f:
-        captions = json.load(f)
+
+def gen_captions(DIR: str):
+    with open(f"{DIR}/captions.json", "r+") as f: captions = json.load(f)
 
     files = os.listdir()
     files.remove("captions.json")
-    files.remove("captions.py")
 
     pre_prompt = [
         """
@@ -30,11 +29,11 @@ if __name__ == '__main__':
     print("---x---")
     un_caped = [file for file in files if file not in captions]
     while len(un_caped) > 0:
-        files = [un_caped.pop() for _ in range(min(25, len(un_caped)))]
+        files = [un_caped.pop() for _ in range(min(36, len(un_caped)))]
         print(files)
         caped = eval(input("caped: "))
         for file in files:
             captions[file] = caped.pop(0)
 
-    with open("captions.json", "w") as f:
+    with open(f"{DIR}/captions.json", "w") as f:
         json.dump(captions, f, indent=4)
