@@ -1,8 +1,8 @@
 import torch
 from torch import optim
 
-from babyDiffusion import ConvVAE, vae_loss, train, test
-from example.dataset import ImgCapDataset
+from babyDiffusion import ConvVAE, VAELoss, train, test
+from examples.dataset import ImgCapDataset
 
 
 def check_cvae(model: "ConvVAE", dataset: "ImgCapDataset"):
@@ -20,11 +20,12 @@ def check_cvae(model: "ConvVAE", dataset: "ImgCapDataset"):
 
 
 if __name__ == '__main__':
-    cvae = ConvVAE(3, 1 << 4, dropout=False, batch_norm=False, layers=4)
-    ds = ImgCapDataset("example/shapesdata", img_transform=lambda x: x.float() / 255)
+    cvae = ConvVAE(3, 1 << 5, dropout=False, batch_norm=True, layers=3)
+    ds = ImgCapDataset("examples/shapesdata", img_transform=lambda x: x.float() / 255)
     optimizer = optim.Adam(cvae.parameters(), lr=1e-3)
+    loss_fnc = VAELoss()
 
     ds.mode("images")
-    train(cvae, ds, optimizer, vae_loss, ne=1 << 4, bs=1 << 3)
+    train(cvae, ds, optimizer, loss_fnc, ne=1 << 5, bs=1 << 1)
 
     check_cvae(cvae, ds)
