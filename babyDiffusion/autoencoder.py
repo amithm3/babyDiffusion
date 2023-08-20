@@ -12,10 +12,11 @@ class AutoEncoder(nn.Module, metaclass=ABCMeta):
         super().__init__()
         self._in_chn = in_chn
         self._latent_bits = latent_bits
-        self._dropout = kwargs.get("dropout", False)
         self._batch_norm = kwargs.get("batch_norm", False)
         self._device = kwargs.get("device", torch.device("cpu"))
         self._layers = kwargs.get("layers", 3)
+        assert isinstance(self._layers, (int, tuple, list))
+        if isinstance(self._layers, int): self._layers = [32 * i for i in range(1, self._layers + 1)]
         self._kwargs = kwargs
 
         self._encoder, self._decoder = self._build()
@@ -70,30 +71,25 @@ class VariationalAutoEncoder(AutoEncoder):
 
     def _build(self) -> tuple["nn.Module", "nn.Module"]:
         encoder = self._build_encoder()
-        self._fc_mu = nn.LazyLinear(self._latent_bits)
-        self._fc_logvar = nn.LazyLinear(self._latent_bits)
-        self._un_fc = None
+
+        self._fc_mu = nn.Sequential(
+            nn.LazyLinear(self._latent_bits),
+            nn.LeakyReLU()
+        )
+
+        self._fc_logvar = nn.Sequential(
+            nn.LazyLinear(self._latent_bits),
+            nn.LeakyReLU()
+        )
+
+        self._un_fc = nn.Sequential(
+            # nn.Linear Lazy Initialization
+            nn.LeakyReLU(),
+        )
+
         decoder = self._build_decoder()
-        self._encode, self.encode = self.encode, self._encode
+
         return encoder, decoder
-
-    def _encode(self, X: "torch.Tensor") -> Union[tuple["torch.Tensor", ...], "torch.Tensor"]:
-        E = self._encoder(X)
-
-        # Lazy initialization
-        if self._un_fc is None:
-            self._un_fc = nn.Linear(self._latent_bits, torch.prod(torch.tensor(E.shape[1:])).item())
-            flatten = nn.Flatten()
-            self._encoder.append(flatten)
-            un_flatten = nn.Unflatten(1, E.shape[1:])
-            self._decoder.insert(0, un_flatten)
-            E = flatten(E)
-            self._encode, self.encode = self.encode, self._encode
-
-        mu = self._fc_mu(E)
-        logvar = self._fc_logvar(E)
-        z = self.reparameterize(mu, logvar)
-        return z, mu, logvar
 
     def encode(self, X: "torch.Tensor") -> Union[tuple["torch.Tensor", ...], "torch.Tensor"]:
         E = self._encoder(X)
@@ -112,14 +108,14 @@ class VariationalAutoEncoder(AutoEncoder):
 
 
 class VAELoss:
-    def __init__(self, beta: float = 1000):
+    def __init__(self, beta: float = 1):
         self._beta = beta
 
     def __call__(self, out, X):
         RECON_X, mu, logvar = out
-        re_loss = torch.mean((RECON_X - X) ** 2)
-        kl_loss = torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) * -0.5
-        return re_loss * self._beta + kl_loss
+        re_loss = ((RECON_X - X) ** 2).sum(axis=(1, 2, 3)).mean()
+        kl_loss = (1 + logvar - mu.pow(2) - logvar.exp()).sum(axis=1).mean() * -0.5
+        return self._beta * re_loss + kl_loss
 
 
 def train(
@@ -156,8 +152,8 @@ def test(
         bs: int = 32,
 ):
     loss_sum = 0
-    for batch, (X, Y) in enumerate(b_prog := tqdm(DataLoader(ds, batch_size=bs, shuffle=True))):
-        loss = criterion(model(X), Y)
+    for batch, X in enumerate(b_prog := tqdm(DataLoader(ds, batch_size=bs, shuffle=True))):
+        loss = criterion(model(X), X)
         loss_sum += loss.item()
         b_prog.set_postfix({
             "Batch": f"{batch + 1}/{len(ds) // bs}",
